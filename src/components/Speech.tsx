@@ -5,9 +5,7 @@ import propose from 'propose'
 
 import { useState } from 'react'
 import { useParams } from 'react-router'
-import SpeechRecognition, {
-  useSpeechRecognition,
-} from 'react-speech-recognition'
+
 import { publishPollen } from '../lib/sheet'
 import { pollensList } from '../data/arrays'
 
@@ -17,13 +15,18 @@ interface Props {
 
 export default function Speech({ date }: Props) {
   const { sheetId } = useParams()
+  
   const [interval, setInterval] = useState('_0h')
+  const [transcript, setTranscript] = useState('')
+  const [isListening, setIsListening] = useState(false)
 
+  // Ok
   function hourCommand(hour: number) {
     if (isNaN(hour)) return
     if (hour >= 0 && hour <= 23) setInterval(`_${hour}h`)
   }
 
+  // Ok
   async function pollenCommand(
     proposedPollen: string,
     amount: number,
@@ -40,85 +43,36 @@ export default function Speech({ date }: Props) {
       amount,
       date,
     })
-  }
+  } 
 
-  const commands = [
-    {
-      command: ['reset', 'clear', 'stop'],
-      callback: ({ resetTranscript }: { resetTranscript: () => void }) => {
-        resetTranscript()
-      },
-    },
-    {
-      command: [':firstArgument :secondArgument'],
-      callback: (
-        firstArgument: string,
-        secondArgument: number,
-        { resetTranscript }: { resetTranscript: () => void }
-      ) => {
-        const hourLabel = propose(firstArgument, ['hour', 'time'], {
-          ignoreCase: true,
-          threshold: 0.5,
-        })
+  function processCommand(text: string) {
+    const parts = text.split(' ')
 
-        if (hourLabel) {
-          hourCommand(secondArgument)
-          resetTranscript()
-          return
-        }
+    if (parts.length < 2) return
+    
+    const firstArgument = parts[0]
+    const secondArgument = Number(parts[1])
 
-        const pollen = propose(firstArgument, pollensList, {
-          ignoreCase: true,
-          threshold: 0.5,
-        })
-
-        if (pollen) {
-          pollenCommand(pollen, secondArgument, '+')
-        }
-
-        resetTranscript()
-      },
-    },
-    {
-      command: [
-        ':firstArgument minus :secondArgument',
-        ':firstArgument - :secondArgument',
-      ],
-      callback: async (
-        firstArgument: string,
-        secondArgument: number,
-        { resetTranscript }: { resetTranscript: () => void }
-      ) => {
-        const pollen = propose(firstArgument, pollensList, {
-          ignoreCase: true,
-          threshold: 0.5,
-        })
-        if (pollen) pollenCommand(pollen, secondArgument, '-')
-
-        resetTranscript()
-      },
-    },
-  ]
-
-  const { resetTranscript, transcript } = useSpeechRecognition({
-    commands,
-  })
-  const [isListening, setIsListening] = useState(false)
-  const handleListening = () => {
-    setIsListening(true)
-    SpeechRecognition.startListening({
-      language: 'en-US',
-      continuous: true,
+    const hourLabel = propose(firstArgument, ['hour', 'time'], {
+      ignoreCase: true,
+      threshold:0.5,
     })
+
+    if(hourLabel){
+      hourCommand(secondArgument)
+      return
+    }
+
+    const pollen = propose(firstArgument, pollensList, {
+      ignoreCase: true,
+      threshold: 0.5,
+    })
+
+    if(pollen){
+      pollenCommand(pollen, secondArgument, '+')
+    }
   }
-  const stopHandle = () => {
-    setIsListening(false)
-    SpeechRecognition.stopListening()
-  }
-  const handleReset = () => {
-    stopHandle()
-    resetTranscript()
-  }
+  
 
   return (
     <Box className="flex w-full flex-col items-center justify-center">
